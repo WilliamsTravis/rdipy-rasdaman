@@ -24,5 +24,5 @@ sudo apt-get update
 # Install rasdaman
 sudo apt-get install rasdaman
 
-# Check that it worked
+# Add rasdaman bin to path for this initial session (will be rerun each startup)
 source /etc/profile.d/rasdaman.sh
