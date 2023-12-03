@@ -25,7 +25,7 @@ from geodaman import GEODAMAN_DIR
 
 RMANHOME = os.getenv("RMANHOME")
 DATA_DIR = GEODAMAN_DIR.joinpath("data")
-SAMPLE = "/home/travis/scratch/rasdaman/sresa1b_ncar_ccsm3-example.nc"
+SAMPLE = DATA_DIR.joinpath("test.nc")
 USR = "rasadmin"
 PW = "rasadmin"
 GROUPS = [
@@ -36,6 +36,8 @@ GROUPS = [
 TYPE_MAP = {
     "Float32": "float"
 }
+POSSIBLE_LATS = ["y", "ylat", "latitude", "lat"]
+POSSIBLE_LONS = ["x", "xlon", "xlong", "longitude", "lon", "long"]
 
 
 class RasdamanQueryError(Exception):
@@ -82,11 +84,20 @@ class Importer:
         sp.run([self.wcst_import, "--help"], shell=False,
                executable="/bin/bash", check=True)
 
-    def load(self, path):
-        """Import file into Rasdaman database."""
+    def load(self, path, mock=False):
+        """Import file into Rasdaman database.
+
+        Parameters
+        ----------
+        path : str | PosixPath
+            Path to file to load into Rasdaman. 
+        mock : bool
+            If true, no data will be loaded, the process will only be
+            checked for validity.
+        """
         # Write temporary ingredients file
         dst = "./tmp_ingredients.json"
-        ingredients = self.make_ingredients(path)
+        ingredients = self.make_ingredients(path, mock=mock)
         with open(dst, "w", encoding="utf-8") as file:
             file.write(json.dumps(ingredients, indent=4))
 
@@ -94,11 +105,20 @@ class Importer:
         out = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
                      executable="/bin/bash")
 
-    def make_ingredients(self, path):
-        """Make an ingredients JSON for a file."""
+    def make_ingredients(self, path, mock=False):
+        """Make an ingredients JSON for a file.
+        
+        Parameters
+        ----------
+        path : str | PosixPath
+            Path to file to load into Rasdaman. 
+        mock : bool
+            If true, no data will be loaded, the process will only be
+            checked for validity.
+        """
         driver = self.get_driver(path)
         if driver == "Network Common Data Format":
-            ingredients = self._ingredients_nc(path)
+            ingredients = self._ingredients_nc(path, mock=mock)
         else:
             raise NotImplementedError(f"Haven't figured {driver} method out"
                                       "yet")
@@ -124,13 +144,18 @@ class Importer:
             config = json.load(file)
         return config
 
-    def _ingredients_nc(self, path):
+    def _ingredients_nc(self, path, mock=False):
         """Create an ingedients JSON for a NetCDF file."""
         # Make sure this path is a Posix path
         path = Path(path)
         tag = path.stem
+
+        # Retrieve information from file
         ds = xr.open_dataset(path)
-        res = float(abs(ds["lat"][0] - ds["lat"][1]))
+        lat = [d for d in ds.dims if d in POSSIBLE_LATS][0]
+        lon = [d for d in ds.dims if d in POSSIBLE_LONS][0]
+        res = float(abs(ds[lat][0] - ds[lat][1]))
+        t1 = str(ds["time"].data[0])
 
         # Build initial config
         config = {
@@ -138,7 +163,7 @@ class Importer:
             "tmp_directory": "/tmp/",
             "crs_resolver": "http://localhost:8080/def/",
             "default_crs": "http://localhost:8080/def/OGC/0/Index2D",
-            "mock": False,
+            "mock": mock,
             "automated": False,  # Human input required, turn on to avoid
             "track_files": False,
             "subset_correction": False
@@ -160,15 +185,15 @@ class Importer:
                 "type": "ansidate",
                 "irregular": True
             },
-            "lat": {
-                "min": str(float(ds["lat"].min())),
-                "max": str(float(ds["lat"].max())),
+            lat: {
+                "min": str(float(ds[lat].min())),
+                "max": str(float(ds[lat].max())),
                 "gridOrder": 1,
                 "resolution": res
             },
-            "lon": {
-                "min": str(float(ds["lon"].min())),
-                "max": str(float(ds["lon"].max())),
+            lon: {
+                "min": str(float(ds[lon].min())),
+                "max": str(float(ds[lon].max())),
                 "gridOrder": 2,
                 "resolution": res
             }
@@ -178,17 +203,17 @@ class Importer:
         recipe = {
             "name": "time_series_regular",
             "options": {
-                "time_start": "2000-05-16T12:00:00",
+                "time_start": t1,
                 "time_format": "auto",
                 "time_crs": "http://localhost:8080/def/crs/OGC/0/AnsiDate",
-                "time_step": "30 days 0 minutes 0 seconds",
+                "time_step": "30 days 0 minutes 0 seconds",  # What is this format?
                 "tiling": "ALIGNED [0:2, 0:100, 0:100]",
                 "coverage": {
                     "slicer": {
                         "type": "netcdf",
                         "bands": [
                             {
-                                "name": "spei6_20yr",
+                                "name": tag,
                                 "variable": "index",
                                 "indentifier": "index"
                             }
@@ -241,8 +266,6 @@ class RDBC(Importer):
         query = "select c from RAS_COLLECTIONNAMES as c"
         out = self.read(query)
         return out.data
-
-
 
     def drop(self, query):
         """Drop data from the database with a query.
@@ -468,6 +491,7 @@ class RDBC(Importer):
 
 if __name__ == "__main__":
     path = str(SAMPLE)
+    path = "/home/travis/github/ssri/ssri/data/climate/main/ppt.nc"
     collection = None
     self = RDBC()
     self.load(path)

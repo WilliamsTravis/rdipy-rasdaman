@@ -1,0 +1,62 @@
+{
+    "config": {
+        "service_url": "http://localhost:8080/rasdaman/ows",
+        "tmp_directory": "/tmp/",
+        "crs_resolver": "http://localhost:8080/def/",
+        "default_crs": "http://localhost:8080/def/OGC/0/Index2D",
+        "mock": false,
+        "automated": false,
+        "track_files": false,
+        "subset_correction": false
+    },
+    "input": {
+        "coverage_id": "ppt",
+        "paths": [
+            "/home/travis/github/ssri/ssri/data/climate/main/ppt.nc"
+        ]
+    },
+    "recipe": {
+        "name": "time_series_regular",
+        "options": {
+            "time_start": "1895-01-01T00:00:00.000000000",
+            "time_format": "auto",
+            "time_crs": "http://localhost:8080/def/crs/OGC/0/AnsiDate",
+            "time_step": "30 days 0 minutes 0 seconds",
+            "tiling": "ALIGNED [0:2, 0:100, 0:100]",
+            "coverage": {
+                "slicer": {
+                    "type": "netcdf",
+                    "bands": [
+                        {
+                            "name": "ppt",
+                            "variable": "index",
+                            "indentifier": "index"
+                        }
+                    ],
+                    "axes": {
+                        "time": {
+                            "min": "datetime(${netcdf:variable:time:min} * 24 * 3600)",
+                            "max": "datetime(${netcdf:variable:time:max} * 24 * 3600)",
+                            "resolution": 1,
+                            "gridOrder": 0,
+                            "type": "ansidate",
+                            "irregular": true
+                        },
+                        "latitude": {
+                            "min": "20.125",
+                            "max": "49.875",
+                            "gridOrder": 1,
+                            "resolution": 0.25
+                        },
+                        "longitude": {
+                            "min": "-129.875",
+                            "max": "-55.125",
+                            "gridOrder": 2,
+                            "resolution": 0.25
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
