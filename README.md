@@ -1,6 +1,6 @@
 geodaman Package
 
-I am experimenting with Rasdaman and store methods in this repository.
+I am experimenting with Rasdaman and storing methods in this repository, though they'll likely go somewhere else soon..
 
 
 A few notes to remember from the installation guide:
