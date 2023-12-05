@@ -286,17 +286,14 @@ class Importer(RDBC):
         return config
 
     def _ingredients_nc(self, path, mock=False):
-        """Create an ingedients JSON for a NetCDF file.
-
-        This is mostly hardcoded with a test dataset for the moment.
-        """
+        """Create an ingedients JSON for a NetCDF file (a specific format)."""
         # Make sure this path is a Posix path
         path = Path(path)
         tag = path.stem
 
         # Retrieve information from file
-        ds = xr.open_dataset(path, decode_times=False)
-        variables = [v for v in ds if v != "crs"]  # Getting first one for the moment
+        ds = xr.open_dataset(path, decode_times=True)
+        variables = [v for v in ds if v != "crs"]
         time_var = ds[variables[0]].dims[0]
         time = [str(t) for t in ds[time_var].data]
 
@@ -319,13 +316,9 @@ class Importer(RDBC):
         # Define axes
         axes = {
             "ansi": {
-                # "min": time[0],
-                # "max": time[-1],
-                # "directPositions": json.dumps(list(time)),
-                "statements": "from datetime import datetime, timedelta",
-                "min": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:day:min})).strftime(\"%Y-%m-%dT%H:%M\")",
-                "max": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:day:max})).strftime(\"%Y-%m-%dT%H:%M\")",
-                "directPositions": "[(datetime(1900,1,1,0,0,0) + timedelta(days=x)).strftime(\"%Y-%m-%dT%H:%M\") for x in ${netcdf:variable:day}]",
+                "min": time[0],
+                "max": time[-1],
+                "directPositions": str(list(time)),
                 "irregular": True,
                 "resolution": "1",
                 "gridOrder": 0,
@@ -385,5 +378,10 @@ class Importer(RDBC):
         """Convert days since to ANSI datetime stamps."""
 
 
-
-if __name__ == "__mpath
+if __name__ == "__main__":
+    path = str(SAMPLE)
+    path = "/data/geod/pdsi_10_PRISM.nc"
+    collection = None
+    mock = False
+    importer = Importer()
+    importer.load(path, mock=False)

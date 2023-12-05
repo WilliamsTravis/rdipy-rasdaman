@@ -1,4 +1,5 @@
 #!/bin/bash
+# Still working on this only debian based systems will work at the moment
 
 # Figure out your OS code name
 os=$(lsb_release -d)
@@ -7,8 +8,9 @@ osname=$(echo $os | awk '{split($0,s);print s[2]}')
 codename=$(echo $code | awk '{split($0,s);print s[2]}')
 echo "Installing Rasdaman for $osname, $codename"
 
-# Certain Debian and Ubuntu systems may install from apt
-if [[ $osname == "Debian" || $osname == "Ubuntu" || $osname == "Pop!_OS" ]]; then
+
+# Certain Debian and Ubuntu systems may install from apt, need to check versions
+if [[ $osname == "Debian" || $osname == "Ubuntu" ]]; then
 
     # Update your package manager to get all the latest stuff
     sudo apt-get upgrade
