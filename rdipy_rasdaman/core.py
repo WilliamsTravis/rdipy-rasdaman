@@ -22,7 +22,6 @@ from rdipy_rasdaman import GEODAMAN_DIR
 RMANHOME = os.getenv("RMANHOME")
 DATA_DIR = GEODAMAN_DIR.joinpath("data")
 SAMPLE = GEODAMAN_DIR.parent.joinpath("tests/data/pdsi_1895_11_PRISM.nc")
-SAMPLE = Path("/data/geod/pdsi_1895_11_PRISM.nc")
 
 USR = "rasadmin"
 PW = "rasadmin"
