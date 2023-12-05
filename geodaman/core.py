@@ -129,12 +129,12 @@ class RDBC:
 
         return contents.data
 
-    def read(self, q):
+    def read(self, query):
         """Read data from the database with a query.
 
         Parameters
         ----------
-        q : str
+        query : str
             String representation of database SQL query.
 
         Returns
@@ -157,12 +157,12 @@ class RDBC:
             types[group] = gtypes.data
         return types
 
-    def write(self, q):
+    def write(self, query):
         """Write items to a database with a query.
 
         Parameters
         ----------
-        q : str
+        query : str
             String representation of database SQL query.
 
         Returns
@@ -364,9 +364,6 @@ class Importer(RDBC):
         }
 
         return ingredients
-
-    def _to_ansi(self, days, base):
-        """Convert days since to ANSI datetime stamps."""
 
 
 if __name__ == "__main__":
