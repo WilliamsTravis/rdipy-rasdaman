@@ -44,10 +44,6 @@ class RasdamanDropError(Exception):
     """"Errors from dropping objects with rasdapy.QueryExecutor."""
 
 
-class DB:
-    """"Methods for reading and writing files."""
-
-
 class RDBC:
     """Rasdaman Database Control object."""
 
