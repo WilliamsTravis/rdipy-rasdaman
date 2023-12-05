@@ -1,6 +1,6 @@
-# geodaman Package
+# rdipy-rasdaman Package
 
-I am experimenting with Rasdaman and storing methods in this repository, though they're going somewhere else soon.
+Rasdapy wrappers and support functions for a Rasdaman database within a broader effort.
 
 ## A few notes to remember from the installation guide:
 * The `/opt/rasdaman/data` directory is where Rasdaman stores array tiles and can become very large, so it is recommended that you link this path to a larger disk
