@@ -26,7 +26,7 @@ from geodaman import GEODAMAN_DIR
 
 RMANHOME = os.getenv("RMANHOME")
 DATA_DIR = GEODAMAN_DIR.joinpath("data")
-SAMPLE = DATA_DIR.joinpath("test.nc")
+SAMPLE = GEODAMAN_DIR.parent.joinpath("tests/data/pdsi_1895_11_PRISM.nc")
 USR = "rasadmin"
 PW = "rasadmin"
 GROUPS = [
@@ -49,211 +49,22 @@ class RasdamanDropError(Exception):
     """"Errors from dropping objects with rasdapy.QueryExecutor."""
 
 
-class Importer:
-    """Methods for building WCST recipes for importing data."""
-
-    def __init__(self):
-        """Initialize Importer object."""
-        self.rasdir = Path(RMANHOME)
-        self.recipe_dir = self.rasdir.joinpath("share/rasdaman/wcst_import/"
-                                               "recipes_custom")
-        self.wcst_import = self.rasdir.joinpath("bin/wcst_import.sh")
-
-    def get_driver(self, path):
-        """Return the appropriate driver for a file (must be GDAL-compatible).
-
-        Parameters
-        ----------
-        path : str | pathlib.PosixPathtif
-        -------
-        str : A string representation of the driver appropriate to this file.
-        """
-        obj = gdal.Open(path)
-        driver = obj.GetDriver().LongName
-        return driver
-
-    def get_crs(self, path):
-        """Return the appropriate CRS ingredient string for a file."""
-        with xr.open_dataset(path) as ds:
-            epsg = ds["crs"].attrs["spatial_ref"]
-        code = epsg.split(":")[-1]
-        crs = f"EPSG/0/{code}@OGC/0/AnsiDate"
-        return crs
-
-    def help(self):
-        """Print help text for wcst import method."""
-        sp.run([self.wcst_import, "--help"], shell=False,
-               executable="/bin/bash", check=True)
-
-    def load(self, path, mock=False):
-        """Import file into Rasdaman database.
-
-        Parameters
-        ----------
-        path : str | PosixPath
-            Path to file to load into Rasdaman. 
-        mock : bool
-            If true, no data will be loaded, the process will only be
-            checked for validity.
-        """
-        # Write temporary ingredients file
-        dst = "./tmp_ingredients.json"
-        ingredients = self.make_ingredients(path, mock=mock)
-        with open(dst, "w", encoding="utf-8") as file:
-            file.write(json.dumps(ingredients, indent=4))
-
-        # Call the import wcst script
-        out = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
-                     executable="/bin/bash")
+class DB:
+    """"Methods for reading and writing files."""
 
 
-    def make_ingredients(self, path, mock=False):
-        """Make an ingredients JSON for a file.
-        
-        Parameters
-        ----------
-        path : str | PosixPath
-            Path to file to load into Rasdaman. 
-        mock : bool
-            If true, no data will be loaded, the process will only be
-            checked for validity.
-        """
-        driver = self.get_driver(path)
-        if driver == "Network Common Data Format":
-            ingredients = self._ingredients_nc(path, mock=mock)
-        else:
-            raise NotImplementedError(f"Haven't figured {driver} method out"
-                                      "yet")
-        return ingredients
-
-    @property
-    def sample(self, type="netcdf"):
-        """Read in a sample ingredients file"""
-        sample_dir = self.rasdir.joinpath("share/rasdaman/wcst_import/"
-                                          "ingredients")
-        path = list(sample_dir.glob(f"*{type}.json"))[0]
-        with open(path, "r", encoding="utf-8") as file:
-            config = json.load(file)
-        return config
-
-    @property
-    def template(self):
-        """Return the template ingredients file with descriptions."""
-        sample_dir = self.rasdir.joinpath("share/rasdaman/wcst_import/"
-                                          "ingredients")
-        path = sample_dir.joinpath("possible_ingredients.json")
-        with open(path, "r", encoding="utf-8") as file:
-            config = json.load(file)
-        return config
-
-    def _ingredients_nc(self, path, mock=False):
-        """Create an ingedients JSON for a NetCDF file."""
-        # Make sure this path is a Posix path
-        path = Path(path)
-        tag = path.stem
-
-        # Retrieve information from file
-        ds = xr.open_dataset(path, decode_times=False)
-        lat = [d for d in ds.dims if d in POSSIBLE_LATS][0]
-        res = float(abs(ds[lat][0] - ds[lat][1]))
-
-        # Build initial config
-        config = {
-            "service_url": "http://localhost:8080/rasdaman/ows",
-            "tmp_directory": "/tmp/",
-            "crs_resolver": "http://localhost:8080/def/",
-            "default_crs": "http://localhost:8080/def/OGC/0/Index2D",
-            "automated": True,  # Human input required, turn on to avoid
-            "mock": mock,
-            "track_files": False,
-            "subset_correction": False
-        }
-
-        # Build initial input
-        inputs = {
-            "coverage_id": tag,
-            "paths": [str(path)]
-        }
-
-        # Define axes
-        axes = {
-            "ansi": {
-                "statements": "from datetime import datetime, timedelta",
-                "min": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:time:min})).strftime(\"%Y-%m-%dT%H:%M\")",
-                "max": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:time:max})).strftime(\"%Y-%m-%dT%H:%M\")",
-                "directPositions": "[(datetime(1900,1,1,0,0,0) + timedelta(days=x)).strftime(\"%Y-%m-%dT%H:%M\") for x in ${netcdf:variable:time}]",
-                "irregular": True,
-                "resolution": "1",
-                "crsOrder": 0,
-                "type": "ansidate"
-            },
-            "index": {
-                "min": "${netcdf:variable:index:min}",
-                "max": "${netcdf:variable:index:max}",
-                "crsOrder": 1,
-                "resolution": 1
-            },
-            "lat": {
-                "min": "${netcdf:variable:latitude:min}",
-                "max": "${netcdf:variable:latitude:max}",
-                "resolution": "${netcdf:variable:latitude:resolution}",
-                "crsOrder": 2,
-            },
-            "lon": {
-                "min": "${netcdf:variable:longitude:min}",
-                "max": "${netcdf:variable:longitude:max}",
-                "resolution": "${netcdf:variable:longitude:resolution}",
-                "crsOrder": 3,
-            }
-        }
-
-        # Build recipe
-        recipe = {
-            "name": "general_coverage",
-            "options": {
-                "tiling": "ALIGNED [0:0, 0:1023, 0:1023] TILE SIZE 4000000",
-                "coverage": {
-                    "crs": "OGC/0/AnsiDate@EPSG/0/4326",
-                    # "crs": "OGC/0/AnsiDate@OGC/0/Index1D?axis-label=\"index\"@EPSG/0/4326",
-                    "metadata": {
-                        "type": "xml",
-                        "global": {}
-                    },
-                    "slicer": {
-                        "type": "netcdf",
-                        "pixelIsPoint": True,
-                        "bands": [
-                            {
-                                "name": tag.upper(),
-                                "identifier": "ppt",
-                                "variable": "ppt"
-                            }
-                        ],
-                        "axes": axes
-                    }
-                }
-            }
-        }
-
-        # Initialize recipe
-        ingredients = {
-            "config": config,
-            "input": inputs,
-            "recipe": recipe
-        }
-
-        return ingredients
-
-
-class RDBC(Importer):
+class RDBC:
     """Rasdaman Database Control object."""
 
     def __init__(self):
         """Initialize an RDBC object."""
-        super().__init__()
         self.db = DBConnector("localhost", 7001, "rasadmin", "rasadmin")
         self.qe = QueryExecutor(self.db)
         self.db.open()
+
+    def __del__(self):
+        """Close database connection on object destruction."""
+        self.db.close()
 
     def __enter__(self):
         """Open database conection with context management."""
@@ -268,7 +79,7 @@ class RDBC(Importer):
         address = hex(id(self))
         name = self.__class__.__name__
         msgs = [f"\n   {k}={v}" for k, v in self.__dict__.items()]
-        msg = ", ".join(msgs)
+        msg = " ".join(msgs)
         return f"<{name} object at {address}>: {msg}"
 
     @property
@@ -297,36 +108,10 @@ class RDBC(Importer):
                 raise RasdamanQueryError(f"Read Error: {msg}")
         return out
 
-    def drop_collection(self, collection):
+    def dropcol(self, collection):
         """Drop collection from database."""
         query = f"drop collection {collection}"
         out = self.drop(query)
-        return out
-
-    def insert_file(self, path, collection=None):
-        """Insert a file into to a database with a query.
-
-        Parameters
-        ----------
-        path : str
-            Path to file insert into object.
-        collection : str
-            Name of collection to insert `file` into. If no collection is given
-            a new collection specific to the data in this file will be created.
-
-        Returns
-        -------
-        rasdapy.query_result.QueryResult : A rasdapy output object.
-        """
-        # Get the appropriate driver for this file
-        driver = self.get_driver(path)
-
-        # Use the appropriate method to insert file
-        if driver == "GeoTIFF":
-            out = self._insert_tiff(path, collection)
-        else:
-            raise NotImplementedError(f"{driver} driver not implemented yet.")
-
         return out
 
     def list(self, collection=None):
@@ -400,106 +185,205 @@ class RDBC(Importer):
                 raise RasdamanQueryError(f"Write Error: {msg}")
         return out
 
-    def _get_tiff_types(self, path):
-        """Return a a dictionary of data types associated with a GeoTiff."""
-        # Open data set and get the first band
-        path = str(path)
-        ds = gdal.Open(path)
-        band = ds.GetRasterBand(1)
 
-        # Get the base type
-        gdaltype = gdal.GetDataTypeName(band.DataType)
-        basetype = TYPE_MAP[gdaltype]
+class Importer(RDBC):
+    """Methods for building WCST recipes for importing data."""
 
-        # Get MDArray type
-        mdtypes = [t for t in self.types["RAS_MARRAY_TYPES"] if basetype in t]
-        bands = ds.RasterCount
-        if bands > 1:
-            mdtype = [t for t in mdtypes if "Cube4" in t][0]
+    def __init__(self):
+        """Initialize Importer object."""
+        super().__init__()
+        self.rasdir = Path(RMANHOME)
+        self.recipe_dir = self.rasdir.joinpath("share/rasdaman/wcst_import/"
+                                               "recipes_custom")
+        self.wcst_import = self.rasdir.joinpath("bin/wcst_import.sh")
+
+    def get_driver(self, path):
+        """Return the appropriate driver for a file (must be GDAL-compatible).
+
+        Parameters
+        ----------
+        path : str | pathlib.PosixPathtif
+        -------
+        str : A string representation of the driver appropriate to this file.
+        """
+        obj = gdal.Open(path)
+        driver = obj.GetDriver().LongName
+        return driver
+
+    def get_crs(self, path):
+        """Return the appropriate CRS ingredient string for a file."""
+
+    def help(self):
+        """Print help text for wcst import method."""
+        sp.run([self.wcst_import, "--help"], shell=False,
+               executable="/bin/bash", check=True)
+
+    def load(self, path, mock=False):
+        """Import file into Rasdaman database.
+
+        Parameters
+        ----------
+        path : str | PosixPath
+            Path to file to load into Rasdaman. 
+        mock : bool
+            If true, no data will be loaded, the process will only be
+            checked for validity.
+        """
+        # Write temporary ingredients file
+        dst = "./tmp_ingredients.json"
+        ingredients = self.make_ingredients(path, mock=mock)
+        with open(dst, "w", encoding="utf-8") as file:
+            file.write(json.dumps(ingredients, indent=4))
+
+        # Create a collection
+        collection = Path(path).stem
+        if collection not in self.collections:
+            query = f"create collection {collection} FloatSet3"
+            self.write(query)
+
+        # Call the import wcst script
+        _ = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
+                   executable="/bin/bash")
+        os.remove(dst)
+
+    def make_ingredients(self, path, mock=False):
+        """Make an ingredients JSON for a file.
+
+        Parameters
+        ----------
+        path : str | PosixPath
+            Path to file to load into Rasdaman.
+        mock : bool
+            If true, no data will be loaded, the process will only be
+            checked for validity.
+        """
+        driver = self.get_driver(path)
+        if driver == "Network Common Data Format":
+            ingredients = self._ingredients_nc(path, mock=mock)
         else:
-            md
-        return types
+            raise NotImplementedError(f"Haven't figured {driver} method out"
+                                      "yet")
+        return ingredients
 
-    def _insert_tiff(self, path, collection=None, overwrite=True):
-        """Insert a GeoTIFF into the database."""
-        # Get the data types appropriate for the data in this file
-        dtypes = self._get_tiff_types(path)
+    @property
+    def sample(self, type="netcdf"):
+        """Read in a sample ingredients file"""
+        sample_dir = self.rasdir.joinpath("share/rasdaman/wcst_import/"
+                                          "ingredients")
+        path = list(sample_dir.glob(f"*{type}.json"))[0]
+        with open(path, "r", encoding="utf-8") as file:
+            config = json.load(file)
+        return config
+
+    @property
+    def template(self):
+        """Return the template ingredients file with descriptions."""
+        sample_dir = self.rasdir.joinpath("share/rasdaman/wcst_import/"
+                                          "ingredients")
+        path = sample_dir.joinpath("possible_ingredients.json")
+        with open(path, "r", encoding="utf-8") as file:
+            config = json.load(file)
+        return config
+
+    def _ingredients_nc(self, path, mock=False):
+        """Create an ingedients JSON for a NetCDF file.
+
+        This is mostly hardcoded with a test dataset for the moment.
+        """
+        # Make sure this path is a Posix path
         path = Path(path)
+        tag = path.stem
 
-        # Create collection if needed
-        if not collection:e = [t for t in settypes if f"({mdtype})" in t][0]
-        settype = settype.split()[2]
+        # Retrieve information from file
+        ds = xr.open_dataset(path, decode_times=False)
+        variables = [v for v in ds if v != "crs"]  # Getting first one for the moment
+        time_var = ds[variables[0]].dims[0]
+        time = [str(t) for t in ds[time_var].data]
 
-        # Collect types
-        types = {
-            "basetype": basetype,
-            "mdtype": mdtype,
-            "settype": settype
-        }
-        del ds
-
-        return types
-
-    def _insert_tiff(self, path, collection=None, overwrite=True):
-        """Insert a GeoTIFF into the database."""
-        # Get the data types appropriate for the data in this file
-        dtypes = self._get_tiff_types(path)
-        path = Path(path)
-
-        # Create collection if needed
-        if not collection:
-            collection = path.stem
-            if collection in self.collections:
-                if overwrite:
-                    self.drop_collection(collection)
-                    query = f"create {collection} {dtypes['settype']}"
-                    dtypes = self._get_tiff_types(path)
-                    self.write(query)
-                else:
-                    raise RasdamanQueryError(
-                        f"Cannot create new collection {collection} for {path}"
-                        f", {collection} exists."
-                    )
-
-        query = f"insert into {collection} values decode($1)"
-        path = str(path)
-        out = self.qe.execute_update_from_file(query, path)
-        if "with_error" in out.__dict__:
-            if out.with_error:
-                msg = out.error_message()
-                raise RasdamanQueryError(f"Insert Error: {msg}")
-
-        return out
-
-    def _encode_ncvar(self, ds, name, coordinate=False, time=False):
-        """Translate NetCDF4 variable into encoding entry."""
-        if ds[name].dtype == "float32":
-            dtype = "float"
-        elif ds[name].dtype == "float64":
-            dtype = "double"
-        else:
-            dtype = ds[name].dtype
-
-        vattr = {
-            "name": name,
-            "metadata": ds[name].attrs,
-            "dtype": dtype
+        # Build initial config
+        config = {
+            "service_url": "http://localhost:8080/rasdaman/ows",
+            "tmp_directory": "/tmp/",
+            "automated": True,  # Human input required, turn on to avoid
+            "mock": mock,
+            "track_files": False,
+            "subset_correction": False
         }
 
-        if coordinate:
-            vattr["data"] = list(ds[name].data)
+        # Build initial input
+        inputs = {
+            "coverage_id": tag,
+            "paths": [str(path)]
+        }
 
-        if name == "time":
-            data = list(range(ds[name].data.shape[0]))
-            vattr["data"] = data
-            vattr["type"] = "int"
+        # Define axes
+        axes = {
+            "ansi": {
+                # "min": time[0],
+                # "max": time[-1],
+                # "directPositions": json.dumps(list(time)),
+                "statements": "from datetime import datetime, timedelta",
+                "min": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:day:min})).strftime(\"%Y-%m-%dT%H:%M\")",
+                "max": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:day:max})).strftime(\"%Y-%m-%dT%H:%M\")",
+                "directPositions": "[(datetime(1900,1,1,0,0,0) + timedelta(days=x)).strftime(\"%Y-%m-%dT%H:%M\") for x in ${netcdf:variable:day}]",
+                "irregular": True,
+                "resolution": "1",
+                "gridOrder": 0,
+                "type": "ansidate"
+            },
+            "Lat": {
+                "min": "${netcdf:variable:latitude:min}",
+                "max": "${netcdf:variable:latitude:max}",
+                "resolution": "${netcdf:variable:latitude:resolution}",
+                "gridOrder": 1
+            },
+            "Lon": {
+                "min": "${netcdf:variable:longitude:min}",
+                "max": "${netcdf:variable:longitude:max}",
+                "resolution": "${netcdf:variable:longitude:resolution}",
+                "gridOrder": 2
+            }
+        }
 
-        return vattr
+        # Build recipe
+        recipe = {
+            "name": "general_coverage",
+            "options": {
+                "tiling": "ALIGNED [0:0, 0:1023, 0:1023] TILE SIZE 4000000",
+                "coverage": {
+                    "crs": "OGC:AnsiDate+EPSG:4326",
+                    "metadata": {
+                        "type": "xml",
+                        "global": {}
+                    },
+                    "slicer": {
+                        "type": "netcdf",
+                        "pixelIsPoint": True,
+                        "bands": [
+                            {
+                                "name": var.title(),
+                                "identifier": var,
+                                "variable": var
+                            } for var in variables
+                        ],
+                        "axes": axes
+                    }
+                }
+            }
+        }
+
+        # Initialize recipe
+        ingredients = {
+            "config": config,
+            "input": inputs,
+            "recipe": recipe
+        }
+
+        return ingredients
+
+    def _to_ansi(self, days, base):
+        """Convert days since to ANSI datetime stamps."""
 
 
-if __name__ == "__main__":
-    path = str(SAMPLE)
-    path = "/data/ssri/ppt.nc"
-    collection = None
-    self = RDBC()
-    self.load(path, mock=False)
+
+if __name__ == "__mpath
