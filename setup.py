@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Install Geodaman.
+"""Install rdipy-rasdaman.
 
 Note:
     - Please confirm that GDAL is installed on your system or run
@@ -70,15 +70,15 @@ with open(os.path.join(REPO_DIR, "README.md"), encoding="utf-8") as f:
 
 
 setup(
-    name="geodaman",
+    name="rdipy_rasdaman",
     version="0.0.1",
     description=DESCRIPTION,
     long_description=README,
     author="Travis Williams",
     author_email="Travis.Williams@nrel.gov",
-    packages=["geodaman"],
+    packages=["rdipy_rasdaman"],
     zip_safe=False,
-    keywords="geodaman",
+    keywords="rdipy-rasdaman",
     python_requires=">=3.9",
     classifiers=[
         "Development Status :: 3 - Alpha",

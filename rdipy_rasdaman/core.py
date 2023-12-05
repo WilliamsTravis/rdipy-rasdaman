@@ -16,12 +16,14 @@ from osgeo import gdal
 from rasdapy.db_connector import DBConnector
 from rasdapy.query_executor import QueryExecutor
 
-from geodaman import GEODAMAN_DIR
+from rdipy_rasdaman import GEODAMAN_DIR
 
 
 RMANHOME = os.getenv("RMANHOME")
 DATA_DIR = GEODAMAN_DIR.joinpath("data")
 SAMPLE = GEODAMAN_DIR.parent.joinpath("tests/data/pdsi_1895_11_PRISM.nc")
+SAMPLE = Path("/data/geod/pdsi_1895_11_PRISM.nc")
+
 USR = "rasadmin"
 PW = "rasadmin"
 GROUPS = [
@@ -141,7 +143,7 @@ class RDBC:
         -------
         rasdapy.query_result.QueryResult : A rasdapy output object.
         """
-        out = self.qe.execute_read(q)
+        out = self.qe.execute_read(query)
         if "with_error" in out.__dict__:
             if out.with_error:
                 msg = out.error_message()
@@ -169,7 +171,7 @@ class RDBC:
         -------
         rasdapy.query_result.QueryResult : A rasdapy output object.
         """
-        out = self.qe.execute_write(q)
+        out = self.qe.execute_write(query)
         if "with_error" in out.__dict__:
             if out.with_error:
                 msg = out.error_message()
@@ -370,5 +372,5 @@ if __name__ == "__main__":
     path = str(SAMPLE)
     collection = None
     mock = False
-    importer = Importer()
-    importer.load(path, mock=False)
+    self = Importer()
+    self.load(path, mock=False)
