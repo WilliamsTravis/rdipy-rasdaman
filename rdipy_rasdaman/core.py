@@ -21,7 +21,7 @@ from rdipy_rasdaman import GEODAMAN_DIR
 
 RMANHOME = os.getenv("RMANHOME")
 DATA_DIR = GEODAMAN_DIR.joinpath("data")
-SAMPLE = GEODAMAN_DIR.parent.joinpath("tests/data/pdsi_1895_11_PRISM.nc")
+SAMPLE = GEODAMAN_DIR.parent.joinpath("tests/data/pdsi_1895_10_sample.nc")
 
 USR = "rasadmin"
 PW = "rasadmin"
@@ -227,12 +227,6 @@ class Importer(RDBC):
         with open(dst, "w", encoding="utf-8") as file:
             file.write(json.dumps(ingredients, indent=4))
 
-        # Create a collection
-        collection = Path(path).stem
-        if collection not in self.collections:
-            query = f"create collection {collection} FloatSet3"
-            self.write(query)
-
         # Call the import wcst script
         _ = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
                    executable="/bin/bash")
@@ -281,7 +275,13 @@ class Importer(RDBC):
         """Create an ingedients JSON for a NetCDF file (a specific format)."""
         # Make sure this path is a Posix path
         path = Path(path)
-        tag = path.stem
+        collection = f"{path.stem}_nc"
+
+        # Create a collection
+        if collection not in self.collections:
+            query = f"create collection {collection} FloatSet3"
+            self.write(query)
+
 
         # Retrieve information from file
         ds = xr.open_dataset(path, decode_times=True)
@@ -301,7 +301,7 @@ class Importer(RDBC):
 
         # Build initial input
         inputs = {
-            "coverage_id": tag,
+            "coverage_id": collection,
             "paths": [str(path)]
         }
 
