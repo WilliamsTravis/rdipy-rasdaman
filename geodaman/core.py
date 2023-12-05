@@ -58,7 +58,7 @@ class RDBC:
         self.db.close()
 
     def __enter__(self):
-        """Open database conection with context management."""
+        """Open database connection with context management."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
