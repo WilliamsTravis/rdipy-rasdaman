@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Core rasdapy database access methods.
+"""Core rasdaman/rasdapy database access methods.
 
 Author: travis
 Date: Wed Nov 22 07:31:27 PM MST 2023
