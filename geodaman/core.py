@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dataset readers
-
-Currently trying to get this command to work:
-
-rasql -q 'insert into test_spei6 decode($1, "netcdf", "{ \"formatParameters\": { \"variables\": \"[ \"index\" ]\")' --file ./test.nc --mddtype FloatCube --mddtype float --user rasadmin --passwd rasadmin
-https://rasdaman.org/trac/wiki/Dev/NetcdfFormat#Example
+"""Core rasdapy database access methods.
 
 Author: travis
 Date: Wed Nov 22 07:31:27 PM MST 2023
