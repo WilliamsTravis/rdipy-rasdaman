@@ -368,7 +368,6 @@ class Importer(RDBC):
 
 if __name__ == "__main__":
     path = str(SAMPLE)
-    path = "/data/geod/pdsi_10_PRISM.nc"
     collection = None
     mock = False
     importer = Importer()
