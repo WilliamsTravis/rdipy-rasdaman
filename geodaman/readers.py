@@ -4,6 +4,7 @@
 Currently trying to get this command to work:
 
 rasql -q 'insert into test_spei6 decode($1, "netcdf", "{ \"formatParameters\": { \"variables\": \"[ \"index\" ]\")' --file ./test.nc --mddtype FloatCube --mddtype float --user rasadmin --passwd rasadmin
+https://rasdaman.org/trac/wiki/Dev/NetcdfFormat#Example
 
 Author: travis
 Date: Wed Nov 22 07:31:27 PM MST 2023
@@ -105,6 +106,7 @@ class Importer:
         out = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
                      executable="/bin/bash")
 
+
     def make_ingredients(self, path, mock=False):
         """Make an ingredients JSON for a file.
         
@@ -151,11 +153,9 @@ class Importer:
         tag = path.stem
 
         # Retrieve information from file
-        ds = xr.open_dataset(path)
+        ds = xr.open_dataset(path, decode_times=False)
         lat = [d for d in ds.dims if d in POSSIBLE_LATS][0]
-        lon = [d for d in ds.dims if d in POSSIBLE_LONS][0]
         res = float(abs(ds[lat][0] - ds[lat][1]))
-        t1 = str(ds["time"].data[0])
 
         # Build initial config
         config = {
@@ -163,8 +163,8 @@ class Importer:
             "tmp_directory": "/tmp/",
             "crs_resolver": "http://localhost:8080/def/",
             "default_crs": "http://localhost:8080/def/OGC/0/Index2D",
+            "automated": True,  # Human input required, turn on to avoid
             "mock": mock,
-            "automated": False,  # Human input required, turn on to avoid
             "track_files": False,
             "subset_correction": False
         }
@@ -177,45 +177,56 @@ class Importer:
 
         # Define axes
         axes = {
-            "time": {
-                "min": "datetime(${netcdf:variable:time:min} * 24 * 3600)",
-                "max": "datetime(${netcdf:variable:time:max} * 24 * 3600)",
-                "resolution": 1,
-                "gridOrder": 0,
-                "type": "ansidate",
-                "irregular": True
+            "ansi": {
+                "statements": "from datetime import datetime, timedelta",
+                "min": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:time:min})).strftime(\"%Y-%m-%dT%H:%M\")",
+                "max": "(datetime(1900,1,1,0,0,0) + timedelta(days=${netcdf:variable:time:max})).strftime(\"%Y-%m-%dT%H:%M\")",
+                "directPositions": "[(datetime(1900,1,1,0,0,0) + timedelta(days=x)).strftime(\"%Y-%m-%dT%H:%M\") for x in ${netcdf:variable:time}]",
+                "irregular": True,
+                "resolution": "1",
+                "crsOrder": 0,
+                "type": "ansidate"
             },
-            lat: {
-                "min": str(float(ds[lat].min())),
-                "max": str(float(ds[lat].max())),
-                "gridOrder": 1,
-                "resolution": res
+            "index": {
+                "min": "${netcdf:variable:index:min}",
+                "max": "${netcdf:variable:index:max}",
+                "crsOrder": 1,
+                "resolution": 1
             },
-            lon: {
-                "min": str(float(ds[lon].min())),
-                "max": str(float(ds[lon].max())),
-                "gridOrder": 2,
-                "resolution": res
+            "lat": {
+                "min": "${netcdf:variable:latitude:min}",
+                "max": "${netcdf:variable:latitude:max}",
+                "resolution": "${netcdf:variable:latitude:resolution}",
+                "crsOrder": 2,
+            },
+            "lon": {
+                "min": "${netcdf:variable:longitude:min}",
+                "max": "${netcdf:variable:longitude:max}",
+                "resolution": "${netcdf:variable:longitude:resolution}",
+                "crsOrder": 3,
             }
         }
 
         # Build recipe
         recipe = {
-            "name": "time_series_regular",
+            "name": "general_coverage",
             "options": {
-                "time_start": t1,
-                "time_format": "auto",
-                "time_crs": "http://localhost:8080/def/crs/OGC/0/AnsiDate",
-                "time_step": "30 days 0 minutes 0 seconds",  # What is this format?
-                "tiling": "ALIGNED [0:2, 0:100, 0:100]",
+                "tiling": "ALIGNED [0:0, 0:1023, 0:1023] TILE SIZE 4000000",
                 "coverage": {
+                    "crs": "OGC/0/AnsiDate@EPSG/0/4326",
+                    # "crs": "OGC/0/AnsiDate@OGC/0/Index1D?axis-label=\"index\"@EPSG/0/4326",
+                    "metadata": {
+                        "type": "xml",
+                        "global": {}
+                    },
                     "slicer": {
                         "type": "netcdf",
+                        "pixelIsPoint": True,
                         "bands": [
                             {
-                                "name": tag,
-                                "variable": "index",
-                                "indentifier": "index"
+                                "name": tag.upper(),
+                                "identifier": "ppt",
+                                "variable": "ppt"
                             }
                         ],
                         "axes": axes
@@ -272,7 +283,7 @@ class RDBC(Importer):
 
         Parameters
         ----------
-        q : str
+        query : str
             String representation of database SQL query.
 
         Returns
@@ -297,8 +308,6 @@ class RDBC(Importer):
 
         Parameters
         ----------
-        q : str
-            String representation of database SQL query.
         path : str
             Path to file insert into object.
         collection : str
@@ -317,7 +326,6 @@ class RDBC(Importer):
             out = self._insert_tiff(path, collection)
         else:
             raise NotImplementedError(f"{driver} driver not implemented yet.")
-
 
         return out
 
@@ -491,7 +499,7 @@ class RDBC(Importer):
 
 if __name__ == "__main__":
     path = str(SAMPLE)
-    path = "/home/travis/github/ssri/ssri/data/climate/main/ppt.nc"
+    path = "/data/ssri/ppt.nc"
     collection = None
     self = RDBC()
-    self.load(path)
+    self.load(path, mock=False)

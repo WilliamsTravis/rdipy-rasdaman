@@ -2,55 +2,56 @@
     "config": {
         "service_url": "http://localhost:8080/rasdaman/ows",
         "tmp_directory": "/tmp/",
-        "crs_resolver": "http://localhost:8080/def/",
-        "default_crs": "http://localhost:8080/def/OGC/0/Index2D",
         "mock": false,
-        "automated": false,
+        "automated": true,
         "track_files": false,
         "subset_correction": false
     },
     "input": {
         "coverage_id": "ppt",
         "paths": [
-            "/home/travis/github/ssri/ssri/data/climate/main/ppt.nc"
+            "/data/ssri/ppt.nc"
         ]
     },
     "recipe": {
-        "name": "time_series_regular",
+        "name": "general_coverage",
         "options": {
-            "time_start": "1895-01-01T00:00:00.000000000",
-            "time_format": "auto",
-            "time_crs": "http://localhost:8080/def/crs/OGC/0/AnsiDate",
-            "time_step": "30 days 0 minutes 0 seconds",
-            "tiling": "ALIGNED [0:2, 0:100, 0:100]",
+            "tiling": "ALIGNED [0:100, 0:100, 0:100] TILE SIZE 1000000",
             "coverage": {
+                "crs": "OGC/0/AnsiDate@EPSG/0/4326",
+                "metadata": {
+                    "type": "xml",
+                    "global": {}
+                },
                 "slicer": {
                     "type": "netcdf",
+                    "pixelIsPoint": true,
                     "bands": [
                         {
-                            "name": "ppt",
-                            "variable": "index",
-                            "indentifier": "index"
+                            "name": "PPT",
+                            "identifier": "ppt"
                         }
                     ],
                     "axes": {
-                        "time": {
-                            "min": "datetime(${netcdf:variable:time:min} * 24 * 3600)",
-                            "max": "datetime(${netcdf:variable:time:max} * 24 * 3600)",
-                            "resolution": 1,
-                            "gridOrder": 0,
+                        "ansi": {
+                            "min": "${netcdf:variable:time:min}",
+                            "max": "${netcdf:variable:time:max}",
+                            "directPositions": "${netcdf:variable:time}",
                             "type": "ansidate",
-                            "irregular": true
+                            "resolution": "2",
+                            "irregular": false,
+                            "crs_origin": "1900-01-01",
+                            "gridOrder": 0
                         },
-                        "latitude": {
-                            "min": "20.125",
-                            "max": "49.875",
+                        "Lat": {
+                            "min": "${netcdf:variable:latitude:min}",
+                            "max": "${netcdf:variable:latitude:max}",
                             "gridOrder": 1,
                             "resolution": 0.25
                         },
-                        "longitude": {
-                            "min": "-129.875",
-                            "max": "-55.125",
+                        "Long": {
+                            "min": "${netcdf:variable:longitude:min}",
+                            "max": "${netcdf:variable:longitude:max}",
                             "gridOrder": 2,
                             "resolution": 0.25
                         }
