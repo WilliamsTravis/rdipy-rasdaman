@@ -10,3 +10,16 @@ Rasdapy wrappers and support functions for a Rasdaman database within a broader 
 * rasserver is the rasdaman server engine, it should not be generally invoked in a standalone manner
 * rascontrol allows to interactively control the rasdaman server by communicating with rasmgr
 * rasql is the command-line based query tool, explained in detail in the rasdaman Query Language Guide
+
+
+## To install
+If you're Ubuntu or Debian, you might be able to just run `install_rasdaman.sh`. If not, follow these steps:
+
+* Create a dedicated Rasdaman user (for security):
+  ```
+  sudo adduser rasdaman
+  ```
+* Then run the installation script with a sudo user:
+  ```
+  sudo ./install_rasdaman.sh
+  ```
