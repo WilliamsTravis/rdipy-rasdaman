@@ -22,6 +22,7 @@ from rdipy_rasdaman import GEODAMAN_DIR
 RMANHOME = os.getenv("RMANHOME")
 DATA_DIR = GEODAMAN_DIR.joinpath("data")
 SAMPLE = GEODAMAN_DIR.parent.joinpath("tests/data/pdsi_1895_10_sample.nc")
+
 USR = "rasadmin"
 PW = "rasadmin"
 GROUPS = [
@@ -32,11 +33,8 @@ GROUPS = [
 TYPE_MAP = {
     "Float32": "float"
 }
-POSSIBLE_DIMS = {
-        "latitude": ["y", "ylat", "latitude", "lat"],
-        "longitude": ["x", "xlon", "xlong", "longitude", "lon", "long"],
-        "time": ["time", "day", "date"]
-}
+POSSIBLE_LATS = ["y", "ylat", "latitude", "lat"]
+POSSIBLE_LONS = ["x", "xlon", "xlong", "longitude", "lon", "long"]
 
 
 class RasdamanQueryError(Exception):
@@ -191,26 +189,6 @@ class Importer(RDBC):
                                                "recipes_custom")
         self.wcst_import = self.rasdir.joinpath("bin/wcst_import.sh")
 
-    def _find_nc_dim(self, path, dim="latitude"):
-        """Find the dataset string associated with a given dimension."""
-        # Open dataset and try to infer what the dim is
-        candidates = []
-        with xr.open_dataset(path) as ds:
-            possible = POSSIBLE_DIMS[dim]
-            available = list(ds.dims)
-            for a in available:
-                if any(p for p in possible if p.startswith(a)):
-                    candidates.append(a)
-
-        # If nothing is found, alert user
-        if len(candidates) != 1:
-            raise KeyError(
-                f"Could not find a possible {dim} fields. Please rename "
-                "field to {dim} and try again."
-            )
-
-        return candidates[0]
-
     def get_driver(self, path):
         """Return the appropriate driver for a file (must be GDAL-compatible).
 
@@ -226,66 +204,48 @@ class Importer(RDBC):
 
     def get_crs(self, path):
         """Return the appropriate CRS ingredient string for a file."""
-        ds = xr.open_dataset(path)
-        return "crs"
 
     def help(self):
         """Print help text for wcst import method."""
         sp.run([self.wcst_import, "--help"], shell=False,
                executable="/bin/bash", check=True)
 
-    def load(self, path, variable=None, mock=False):
+    def load(self, path, mock=False):
         """Import file into Rasdaman database.
 
         Parameters
         ----------
         path : str | PosixPath
-            Path to file to load into Rasdaman.
-        variable : str
-            String representing variable in `path` to be uploaded. If None,
-            this will attempt to load all available datasets.
+            Path to file to load into Rasdaman. 
         mock : bool
             If true, no data will be loaded, the process will only be
             checked for validity.
         """
-        # Check if georeferencing information is available
-        crs = self.get_crs(path)
-        if crs:
-            # Write temporary ingredients file
-            dst = Path("./tmp_ingredients.json").absolute()
-            ingredients = self.make_ingredients(path, variable, mock=mock)
-            with open(dst, "w", encoding="utf-8") as file:
-                file.write(json.dumps(ingredients, indent=4))
+        # Write temporary ingredients file
+        dst = "./tmp_ingredients.json"
+        ingredients = self.make_ingredients(path, mock=mock)
+        with open(dst, "w", encoding="utf-8") as file:
+            file.write(json.dumps(ingredients, indent=4))
 
-            # Call the import wcst script
-            _ = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
-                    executable="/bin/bash")
-            os.remove(dst)
+        # Call the import wcst script
+        _ = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
+                   executable="/bin/bash")
+        os.remove(dst)
 
-        else:
-            # No need to try and georeference this
-            print(f"No CRS object found in {path}, uploading native "
-                  "geometries...")
-            raise NotImplementedError(f"I haven't built non-georeferenced "
-                                      "netcdfs into the load method yet.")
-
-
-    def make_ingredients(self, path, variable, mock=False):
+    def make_ingredients(self, path, mock=False):
         """Make an ingredients JSON for a file.
 
         Parameters
         ----------
         path : str | PosixPath
             Path to file to load into Rasdaman.
-        variable : str
-            String representing variable in `path` to be uploaded.
         mock : bool
             If true, no data will be loaded, the process will only be
             checked for validity.
         """
         driver = self.get_driver(path)
         if driver == "Network Common Data Format":
-            ingredients = self._ingredients_nc(path, variable, mock=mock)
+            ingredients = self._ingredients_nc(path, mock=mock)
         else:
             raise NotImplementedError(f"Haven't figured {driver} method out"
                                       "yet")
@@ -315,24 +275,19 @@ class Importer(RDBC):
         """Create an ingedients JSON for a NetCDF file (a specific format)."""
         # Make sure this path is a Posix path
         path = Path(path)
-        collection = f"{path.stem}_nc".replace("-", "_")
+        collection = f"{path.stem}_nc"
 
         # Create a collection
         if collection not in self.collections:
             query = f"create collection {collection} FloatSet3"
             self.write(query)
 
-        # Retrieve information from file
-        time_var = self._find_nc_dim(path, "time")
-        lon_var = self._find_nc_dim(path, "longitude")
-        lat_var = self._find_nc_dim(path, "latitude")
 
-        with xr.open_dataset(path, decode_times=True) as ds:
-            if not variable:
-                variables = [v for v in ds if v != "crs"]
-            else:
-                variables = [variable]
-            time = [str(t) for t in ds[time_var].data]
+        # Retrieve information from file
+        ds = xr.open_dataset(path, decode_times=True)
+        variables = [v for v in ds if v != "crs"]
+        time_var = ds[variables[0]].dims[0]
+        time = [str(t) for t in ds[time_var].data]
 
         # Build initial config
         config = {
@@ -362,15 +317,15 @@ class Importer(RDBC):
                 "type": "ansidate"
             },
             "Lat": {
-                "min": f"${{netcdf:variable:{lat_var}:min}}",
-                "max": f"${{netcdf:variable:{lat_var}:max}}",
-                "resolution": f"${{netcdf:variable:{lat_var}:resolution}}",
+                "min": "${netcdf:variable:latitude:min}",
+                "max": "${netcdf:variable:latitude:max}",
+                "resolution": "${netcdf:variable:latitude:resolution}",
                 "gridOrder": 1
             },
             "Lon": {
-                "min": f"${{netcdf:variable:{lon_var}:min}}",
-                "max": f"${{netcdf:variable:{lon_var}:max}}",
-                "resolution": f"${{netcdf:variable:{lon_var}:resolution}}",
+                "min": "${netcdf:variable:longitude:min}",
+                "max": "${netcdf:variable:longitude:max}",
+                "resolution": "${netcdf:variable:longitude:resolution}",
                 "gridOrder": 2
             }
         }
@@ -413,11 +368,8 @@ class Importer(RDBC):
 
 
 if __name__ == "__main__":
-    # path = str(SAMPLE)
-    # variable = None
-    path = "/home/travis/data/netcdf/rx5dayETCCDI_yr_MIROC5_historical_r2i1p1_1850-2012.nc"
-    variable = "rx5dayETCCDI"
+    path = str(SAMPLE)
     collection = None
     mock = False
     self = Importer()
-    self.load(path, variable, mock=False)
+    self.load(path, mock=False)
