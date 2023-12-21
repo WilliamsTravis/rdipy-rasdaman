@@ -1,11 +1,18 @@
 # -*- coding: utf-8 -*-
-"""Module Name.
+"""RDI Conversions
 
-Module description.
+TODO:
+- Use irregular grid and interpolation for WTK-based files.
+    - https://stackoverflow.com/questions/26758655/how-to-make-grid-of-the-irregular-data
+- Combine years into single time-series
 
 Author: travis
 Date: Wed Dec 13 03:55:17 PM MST 2023
 """
+import datetime as dt
+
+from cftime import date2num
+from dateutil import parser
 from pathlib import Path
 
 import h5py
@@ -82,30 +89,99 @@ class NREL_HDF5:
         meta = meta.rr.to_geo()
         return meta
 
-    def make_grid(self, variable="cf_profile-2012", crs="esri:102008"):
+    def make_grid(self, variable="cf_profile-2012"):
         """Convert HDF5 file to grid."""
         # Get meta object
         meta = self.meta
 
-        # Get the target values and time index
+        # Get the target values and time indexgdal geo transform
         data = self.ds[variable][:] / self.ds[variable].attrs["scale_factor"]
-        time_index = [t.decode() for t  in self.ds["time_index"]]
 
-        # I happen to know that the resolution should be about 11.5 km 
+        # I happen to know that the resolution should be about 11.5 km   # <--- Variable, infer or parameterize
         resolution = 0.16
 
         # Get the ndarray and geotransform
-        array, transform = to_grid(meta, data, resolution)
+        array, geom = to_grid(meta, data, resolution)
 
-        plt.imshow(array)
-        plt.show()
+        return array, geom, variable
+
+    @property
+    def time(self):
+        """Return time index in cf-compatible format."""
+        time_index = [t.decode() for t in self.ds["time_index"]]
+        time = [parser.parse(t) for t in time_index]
+        units = 'hours since {:%Y-%m-%d 00:00}'.format(time[0])
+        values = date2num(time, units)
+        return values, units
 
     def _open(self):
         """Return open file object."""
         return h5py.File(self.file)
 
+    def main(self):
+        """Convert file to NetCDF4 file."""
+        # Get the grid and geotransform
+        array, geom, variable = self.make_grid()
+
+        # Get the time index and it's units
+        time, time_units = self.time
+
+        # Build Data Array
+        lats = [geom["ymax"] + (geom["yres"] * i) for i in range(geom["ny"])]
+        lons = [geom["xmin"] + (geom["xres"] * i) for i in range(geom["nx"])]
+        darray = xr.DataArray(
+            array,
+            coords=[time, lats, lons],
+            dims=["time", "latitude", "longitude"]
+        )
+
+        # Data Array Attributes
+        darray.attrs["standard_name"] = "capacity_factor"    # <--- Variable, infer or parameterize
+        darray.attrs["long_name"] = "Capacity Factor"   # <--- Variable, infer or parameterize
+        darray.attrs["missing_value"] = np.finfo(darray.dtype).max
+        darray.attrs["_FillValue"] = np.finfo(darray.dtype).max
+
+        darray.attrs["valid_min"] = 0
+        darray.attrs["valid_max"] = 1
+
+        darray["latitude"].attrs["standard_name"] = "latitude"
+        darray["latitude"].attrs["long_name"] = "latitude"
+        darray["latitude"].attrs["units"] = "degrees_north"
+
+        darray["longitude"].attrs["standard_name"] = "longitude"
+        darray["longitude"].attrs["long_name"] = "longitude"
+        darray["longitude"].attrs["units"] = "degrees_east"
+
+        darray["time"].encoding["units"] = time_units
+        darray["time"].attrs["units"] = time_units
+        darray["time"].attrs["standard_name"] = "time"
+        darray["time"].attrs["long_name"] = "time"
+
+        darray["crs"] = int()
+        darray["crs"].attrs["grid_mapping_name"] = "latitude_longitude"
+        darray["crs"].attrs["longitude_of_prime_meridian"] = 0.0
+        darray["crs"].attrs["semi_major_axis"] = 6378137.0
+        darray["crs"].attrs["inverse_flattening"] = 298.257223563
+        darray.attrs["grid_mapping"] = "crs"
+
+        # Build Dataset
+        var_name = variable.lower().replace("-", "_")
+        ds = xr.Dataset(data_vars={var_name: darray})
+
+        # Global Attributes
+        ds.attrs["Conventions"] = "CF-1.7"     # <--- Double check the most recent standard version
+        ds.attrs["title"] = "reV Rep-Profile Sample"
+        ds.attrs["nc.institution"] = "Unidata"
+        ds.attrs["source"] = "reV"
+        ds.attrs["date"] = str(dt.datetime.utcnow())
+        ds.attrs["references"] = ""
+        ds.attrs["comment"] = ""
+
+        # Write to file
+        ds.to_netcdf("/data/rdi/test.nc", format="NETCDF4")
+
 
 if __name__ == "__main__":
     file = FILE
     self = NREL_HDF5(file=file)
-    self.make_grid()
+    self.main()

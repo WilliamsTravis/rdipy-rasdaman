@@ -315,7 +315,7 @@ class Importer(RDBC):
         """Create an ingedients JSON for a NetCDF file (a specific format)."""
         # Make sure this path is a Posix path
         path = Path(path)
-        collection = f"{path.stem}_nc".replace("-", "_")
+        collection = f"{path.stem}".replace("-", "_")
 
         # Create a collection
         if collection not in self.collections:
@@ -327,6 +327,7 @@ class Importer(RDBC):
         lon_var = self._find_nc_dim(path, "longitude")
         lat_var = self._find_nc_dim(path, "latitude")
 
+        # For now, build the time index explicitly
         with xr.open_dataset(path, decode_times=True) as ds:
             if not variable:
                 variables = [v for v in ds if v != "crs"]
@@ -350,17 +351,12 @@ class Importer(RDBC):
             "paths": [str(path)]
         }
 
+        # Get the appropriate time recipe
+        time_key, time_recipe = self._time_recipe(time)
+
         # Define axes
         axes = {
-            "ansi": {
-                "min": time[0],
-                "max": time[-1],
-                "directPositions": str(list(time)),
-                "irregular": True,
-                "resolution": "1",
-                "gridOrder": 0,
-                "type": "ansidate"
-            },
+            time_key: time_recipe,
             "Lat": {
                 "min": f"${{netcdf:variable:{lat_var}:min}}",
                 "max": f"${{netcdf:variable:{lat_var}:max}}",
@@ -411,12 +407,25 @@ class Importer(RDBC):
 
         return ingredients
 
+    def _time_recipe(self, time):
+        """Return the appropriate time recipe for the ingredients file."""
+        key = "ansi"
+        recipe = {
+            "min": time[0],
+            "max": time[-1],
+            "directPositions": str(list(time)),
+            "irregular": True,
+            "resolution": "1",
+            "gridOrder": 0,
+            "type": "ansidate"
+        }
+
+        return key, recipe
+
 
 if __name__ == "__main__":
-    # path = str(SAMPLE)
-    # variable = None
-    path = "/home/travis/data/netcdf/rx5dayETCCDI_yr_MIROC5_historical_r2i1p1_1850-2012.nc"
-    variable = "rx5dayETCCDI"
+    path = "/data/rdi/test.nc"
+    variable = "cf_profile_2012"
     collection = None
     mock = False
     self = Importer()
