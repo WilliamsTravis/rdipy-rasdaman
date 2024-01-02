@@ -108,29 +108,26 @@ class RDBC:
         out = self.drop(query)
         return out
 
-    def list(self, collection=None):
+    def list(self, pattern=None):
         """List collections in db.
 
         Parameters
         ----------
-        collection : bool
-            Return contents of specified collection, else return list of
-            collections.
+        pattern : str
+            Pattern in collection names used to filter the list of collections
+            returned. Defaults to None.
 
         Returns
         -------
         list : List of items, with the type depending on user arguments.
         """
-        if not collection:
-            contents = self.qe.execute_read(
-                "select c from RAS_COLLECTIONNAMES as c"
-            )
-        else:
-            contents = self.qe.execute_read(
-                f"select c from RAS_COLLECTIONNAMES.{collection} as c"  # ?
-            )
-
-        return contents.data
+        out = self.qe.execute_read(
+            "select c from RAS_COLLECTIONNAMES as c"
+        )
+        collections = out.data
+        if pattern:
+            collections = [col for col in collections if pattern in col]
+        return collections
 
     def read(self, query):
         """Read data from the database with a query.
@@ -198,9 +195,9 @@ class Importer(RDBC):
         with xr.open_dataset(path) as ds:
             possible = POSSIBLE_DIMS[dim]
             available = list(ds.dims)
-            for a in available:
-                if any(p for p in possible if p.startswith(a)):
-                    candidates.append(a)
+            for avail in available:
+                if any(p for p in possible if p.startswith(avail)):
+                    candidates.append(avail)
 
         # If nothing is found, alert user
         if len(candidates) != 1:
@@ -226,7 +223,7 @@ class Importer(RDBC):
 
     def get_crs(self, path):
         """Return the appropriate CRS ingredient string for a file."""
-        ds = xr.open_dataset(path)
+        # ds = xr.open_dataset(path)
         return "crs"
 
     def help(self):
@@ -258,17 +255,20 @@ class Importer(RDBC):
                 file.write(json.dumps(ingredients, indent=4))
 
             # Call the import wcst script
-            _ = sp.run(f"{str(self.wcst_import)} {dst}", shell=True, check=False,
-                    executable="/bin/bash")
+            _ = sp.run(
+                f"{str(self.wcst_import)} {dst} --identity-file ~/.rasdaman",
+                shell=True,
+                check=False,
+                executable="/bin/bash"
+            )
             os.remove(dst)
 
         else:
             # No need to try and georeference this
             print(f"No CRS object found in {path}, uploading native "
                   "geometries...")
-            raise NotImplementedError(f"I haven't built non-georeferenced "
+            raise NotImplementedError("I haven't built non-georeferenced "
                                       "netcdfs into the load method yet.")
-
 
     def make_ingredients(self, path, variable, mock=False):
         """Make an ingredients JSON for a file.
@@ -424,9 +424,9 @@ class Importer(RDBC):
 
 
 if __name__ == "__main__":
-    path = "/data/rdi/test.nc"
-    variable = "cf_profile_2012"
+    path = "/data/rdi/pdsi_12_PRISM.nc"
+    variable = "data"
     collection = None
     mock = False
     self = Importer()
-    self.load(path, variable, mock=False)
+    # self.load(path, variable, mock=False)

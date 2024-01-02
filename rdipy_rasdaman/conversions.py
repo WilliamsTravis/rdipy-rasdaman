@@ -27,10 +27,6 @@ from revruns.rraster import to_grid
 from revruns import rr
 
 
-HOME = Path("/data/rdi")
-FILE = HOME.joinpath("reference_2030_moderate_115hh_170rd_bespoke.h5")
-
-
 def animate(array, time_index):
     """Run a quick animation of the dataset."""
     fig, ax = plt.subplots()
@@ -182,6 +178,7 @@ class NREL_HDF5:
 
 
 if __name__ == "__main__":
-    file = FILE
+    home = Path("/data/rdi")
+    file = home.joinpath("reference_2030_moderate_115hh_170rd_bespoke.h5")
     self = NREL_HDF5(file=file)
     self.main()
