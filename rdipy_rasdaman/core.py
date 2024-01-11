@@ -10,6 +10,7 @@ import subprocess as sp
 
 from pathlib import Path
 
+import requests
 import xarray as xr
 
 from osgeo import gdal
@@ -104,8 +105,33 @@ class RDBC:
 
     def dropcol(self, collection):
         """Drop collection from database."""
+        # Drop collection from RASBASE
         query = f"drop collection {collection}"
         out = self.drop(query)
+
+        # Check if collection exists as a geo coverage in SECORE
+        host = "http://localhost:8080/rasdaman/admin/coverage"
+        query = f"{host}/exist?coverageId={collection}"
+        out = requests.request(
+            url=query,
+            method="GET",
+            auth=("rasadmin", "rasadmin"),
+            timeout=15
+        )
+        cov_exists = json.loads(out.content.decode())
+
+        # Drop coverage from petascope
+        if cov_exists:
+            query = ("http://localhost:8080/rasdaman/ows/?"
+                     "SERVICE=WCS&VERSION=2.0.1&REQUEST=DeleteCoverage&"
+                     f"COVERAGEID={collection}")
+            out = requests.request(
+                url=query,
+                method="POST",
+                auth=("rasadmin", "rasadmin"),
+                timeout=15
+            )
+            
         return out
 
     def list(self, pattern=None):
@@ -318,9 +344,9 @@ class Importer(RDBC):
         collection = f"{path.stem}".replace("-", "_")
 
         # Create a collection
-        if collection not in self.collections:
-            query = f"create collection {collection} FloatSet3"
-            self.write(query)
+        # if collection not in self.collections:
+        #     query = f"create collection {collection} FloatSet3"
+        #     self.write(query)
 
         # Retrieve information from file
         time_var = self._find_nc_dim(path, "time")
@@ -361,13 +387,16 @@ class Importer(RDBC):
                 "min": f"${{netcdf:variable:{lat_var}:min}}",
                 "max": f"${{netcdf:variable:{lat_var}:max}}",
                 "resolution": f"${{netcdf:variable:{lat_var}:resolution}}",
-                "gridOrder": 1
+                "gridOrder": 1,
+                "crsOrder": 1,
             },
             "Lon": {
                 "min": f"${{netcdf:variable:{lon_var}:min}}",
                 "max": f"${{netcdf:variable:{lon_var}:max}}",
                 "resolution": f"${{netcdf:variable:{lon_var}:resolution}}",
-                "gridOrder": 2
+                "gridOrder": 2,
+                "crsOrder": 2
+                
             }
         }
 
@@ -417,6 +446,7 @@ class Importer(RDBC):
             "irregular": True,
             "resolution": "1",
             "gridOrder": 0,
+            "crsOrder": 0,
             "type": "ansidate"
         }
 
@@ -424,9 +454,9 @@ class Importer(RDBC):
 
 
 if __name__ == "__main__":
-    path = "/data/rdi/pdsi_12_PRISM.nc"
-    variable = "data"
-    collection = None
+    path = "/data/rdi/reference_2030_moderate_115hh_170rd_bespoke.nc"
+    variable = "cf_profile_2012"
     mock = False
+    self = RDBC()
     self = Importer()
-    # self.load(path, variable, mock=False)
+    self.load(path, variable, mock=False)

@@ -74,7 +74,7 @@ cd build
 sudo cmake .. -DC_MAKE_INSTALL_PREFIX=$RMANHOME -DGENERATE_PIC=yes \
 -DUSE_GRIB=yes -DUSE_HDF4=yes -DUSE_NETCDF=yes \
 -DUSE_TIFF=yes -DUSE_PNG=yes -DUSE_JPEG=yes -DENABLE_JAVA=yes
-sudo make -j8
+sudo make -j16
 sudo make install
 
 # Export paths
