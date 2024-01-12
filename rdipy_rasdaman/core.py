@@ -243,7 +243,7 @@ class Importer(RDBC):
         -------
         str : A string representation of the driver appropriate to this file.
         """
-        obj = gdal.Open(path)
+        obj = gdal.Open(str(path))
         driver = obj.GetDriver().LongName
         return driver
 
@@ -451,12 +451,3 @@ class Importer(RDBC):
         }
 
         return key, recipe
-
-
-if __name__ == "__main__":
-    path = "/data/rdi/reference_2030_moderate_115hh_170rd_bespoke.nc"
-    variable = "cf_profile_2012"
-    mock = False
-    self = RDBC()
-    self = Importer()
-    self.load(path, variable, mock=False)

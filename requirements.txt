@@ -2,7 +2,7 @@ protobuf==3.19.0
 rasdapy3==1.1.0
 setuptools==59.6.0
 xarray==2023.11.0
-netcdf==1.6.5
+netcdf4==1.6.5
 h5py==3.10.0
 lxml==5.0.0
 requests==2.31.0
