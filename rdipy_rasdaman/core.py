@@ -51,9 +51,10 @@ class RasdamanDropError(Exception):
 class RDBC:
     """Rasdaman Database Control object."""
 
-    def __init__(self):
+    def __init__(self, host="localhost", user="rasadmin", passwd="rasadmin",
+                 port=7001):
         """Initialize an RDBC object."""
-        self.db = DBConnector("localhost", 7001, "rasadmin", "rasadmin")
+        self.db = DBConnector(host, port, user, passwd)
         self.qe = QueryExecutor(self.db)
         self.db.open()
 
