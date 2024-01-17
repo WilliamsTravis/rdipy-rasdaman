@@ -54,6 +54,10 @@ class RDBC:
     def __init__(self, hostname="localhost", username="rasadmin",
                  password="rasadmin", port=7001, database="RASBASE"):
         """Initialize an RDBC object."""
+        self.hostname = hostname
+        self.username = username
+        self.port = port
+        self.database = database
         self.db = DBConnector(
             hostname=hostname,
             port=port,
